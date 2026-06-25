@@ -87,7 +87,7 @@ export async function anchorHashOnStellar(hashHex: string): Promise<AnchorResult
   const network: 'testnet' | 'mainnet' = 'testnet';
 
   try {
-    const cleanHash = hashHex.replace(/^0x/, '');
+    console.log('[Stellar] anchorHashOnStellar chamado, hash:', hashHex);const cleanHash = hashHex.replace(/^0x/, '');
 
     if (cleanHash.length !== 64) {
       throw new Error(
@@ -107,13 +107,19 @@ export async function anchorHashOnStellar(hashHex: string): Promise<AnchorResult
       fee: BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      // Operação minimalista: pagamento de 0.0000001 XLM para a própria conta.
-      // O conteúdo que importa é o memo_hash carregado pela transação.
+      // [CORREÇÃO 1] Substituído Operation.payment() por Operation.manageData().
+      // Antes, o código tentava fazer um pagamento de 0.0000001 XLM da conta
+      // operacional para ela mesma (destination: operatorPublicKey), o que causa
+      // erro op_src_equals_dest na Stellar — uma conta não pode ser origem e
+      // destino ao mesmo tempo em uma operação de payment.
+      // Operation.manageData() é a operação correta para este caso: ela grava
+      // uma entrada de dados arbitrária (chave/valor) na própria conta, sem
+      // mover fundos, e carrega o memo_hash que é o que realmente importa aqui.
+      // A chave 'wave_anchor' identifica o propósito da entrada no ledger.
       .addOperation(
-        Operation.payment({
-          destination: operatorPublicKey,
-          asset: Asset.native(),
-          amount: '0.0000001',
+        Operation.manageData({
+          name: 'wave_anchor',
+          value: memoBuffer, // 32 bytes do hash SHA-256 do documento
         })
       )
       .addMemo(Memo.hash(memoBuffer))
@@ -185,3 +191,4 @@ export async function sha256Hex(content: string | Buffer): Promise<string> {
   const crypto = await import('crypto');
   return crypto.createHash('sha256').update(content).digest('hex');
 }
+

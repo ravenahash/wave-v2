@@ -146,8 +146,8 @@ export function AdminPanel() {
     toast.error('Documento rejeitado.');
   };
 
-  const pendingProposalsCount = pendingProposals.filter(p => p.status === 'pending').length;
-  const pendingDocumentsCount = pendingDocuments.filter(d => d.status === 'pending').length;
+  const pendingProposalsCount = pendingProposals.filter(p => p.status === 'pending' || p.status === 'pending_approval').length;
+  const pendingDocumentsCount = pendingDocuments.filter(d => d.status === 'pending' || d.status === 'pending_approval').length;
 
   return (
     <div className="p-8 bg-gradient-to-br from-wave-700 to-wave-500 min-h-screen relative">
@@ -268,7 +268,7 @@ export function AdminPanel() {
       <div className="mb-8 relative z-10">
         <h2 className="text-wave-800 text-2xl mb-4">Propostas Pendentes</h2>
         
-        {pendingProposals.filter(p => p.status === 'pending').length === 0 ? (
+        {pendingProposals.filter(p => p.status === 'pending' || p.status === 'pending_approval').length === 0 ? (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-wave-100 p-12 text-center shadow-lg">
             <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
             <p className="text-wave-500">Nenhuma proposta aguardando aprovação</p>
@@ -276,7 +276,7 @@ export function AdminPanel() {
         ) : (
           <div className="space-y-4">
             {pendingProposals
-              .filter(p => p.status === 'pending')
+              .filter(p => p.status === 'pending' || p.status === 'pending_approval')
               .map((proposal) => (
                 <div
                   key={proposal.id}
@@ -303,9 +303,9 @@ export function AdminPanel() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleApproveProposal(proposal)}
-                      disabled={!isConnected || deploying === proposal.id}
+                      disabled={deploying === proposal.id}
                       className={`flex-1 py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                        isConnected && deploying !== proposal.id
+                        deploying !== proposal.id
                           ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 shadow-lg'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
@@ -341,7 +341,7 @@ export function AdminPanel() {
       <div className="relative z-10">
         <h2 className="text-wave-800 text-2xl mb-4">Documentos Pendentes</h2>
         
-        {pendingDocuments.filter(d => d.status === 'pending').length === 0 ? (
+        {pendingDocuments.filter(d => d.status === 'pending' || d.status === 'pending_approval').length === 0 ? (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-wave-100 p-12 text-center shadow-lg">
             <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
             <p className="text-wave-500">Nenhum documento aguardando aprovação</p>
@@ -349,7 +349,7 @@ export function AdminPanel() {
         ) : (
           <div className="space-y-4">
             {pendingDocuments
-              .filter(d => d.status === 'pending')
+              .filter(d => d.status === 'pending' || d.status === 'pending_approval')
               .map((document) => (
                 <div
                   key={document.id}
@@ -380,9 +380,9 @@ export function AdminPanel() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleApproveDocument(document)}
-                      disabled={!isConnected || deploying === document.id}
+                      disabled={deploying === document.id}
                       className={`flex-1 py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                        isConnected && deploying !== document.id
+                        deploying !== document.id
                           ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 shadow-lg'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}

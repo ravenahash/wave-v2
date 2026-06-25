@@ -46,7 +46,12 @@ const NETWORK    = Networks.TESTNET;
 const processedBoletoIds = new Set<string>();
 
 // USDC na Stellar Testnet — emitido pelo Circle
-const USDC_ISSUER_TESTNET = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+// [CORREÇÃO 1] O endereço anterior (GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5)
+// estava incorreto e divergia do endereço documentado no cabeçalho deste arquivo.
+// Isso fazia a verificação de trustline (hasUsdc) nunca encontrar USDC,
+// caindo sempre no fallback XLM. Corrigido para o issuer Circle testnet oficial
+// documentado no próprio cabeçalho do arquivo.
+const USDC_ISSUER_TESTNET = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
 const USDC_ASSET = new Asset('USDC', USDC_ISSUER_TESTNET);
 
 // Taxa de câmbio mock: 1 USDC = R$ 5,00 (simplificado para demo)
@@ -167,63 +172,85 @@ export async function processBoletoPagamento(params: {
     const fromPubKey = operatorKeypair.publicKey();
     const toPubKey   = adminKeypair.publicKey();
 
-    // Carrega a conta pagadora
-    const account = await server.loadAccount(fromPubKey);
-
-    // Verifica se a conta tem trustline para USDC.
-    // Na testnet, se não tiver, usamos XLM como fallback e anotamos no memo.
-    let paymentAsset = USDC_ASSET;
+    // [CORREÇÃO 2] Retry com reconstrução de transação a cada tentativa.
+    // Antes, a transação era assinada UMA VEZ fora do loop — se a primeira
+    // tentativa falhasse com tx_bad_seq (número de sequência desatualizado),
+    // reenviar a mesma transação já assinada continuaria falhando para sempre.
+    // Agora a conta é recarregada e a transação é reconstruída e reassinada
+    // a cada tentativa, garantindo que o retry funcione de verdade.
+    //
+    // [CORREÇÃO 2 — continuação] paymentAmount e assetUsed foram movidos para
+    // o escopo externo do loop para ficarem acessíveis ao bloco settlement abaixo.
+    let result: any;
+    let lastError: any;
     let paymentAmount = usdcAmount.toFixed(7);
     let assetUsed: 'USDC' | 'XLM' = 'USDC';
 
-    const balances = account.balances as any[];
-    const hasUsdc = balances.some(
-      (b: any) =>
-        b.asset_type === 'credit_alphanum4' &&
-        b.asset_code === 'USDC' &&
-        b.asset_issuer === USDC_ISSUER_TESTNET
-    );
-
-    if (!hasUsdc) {
-      // Fallback: usa XLM nativo (sempre disponível na testnet)
-      // Em produção, este cenário não ocorre pois a Abroad já entrega USDC
-      paymentAsset = Asset.native();
-      paymentAmount = (usdcAmount * 0.1).toFixed(7); // XLM simbólico (0.1 XLM ≈ 1 USDC em testnet)
-      assetUsed = 'XLM';
-    }
-
-    // Memo no formato padrão: COND-YYYYMM-APTONUM (ex: COND-202607-APTO101)
-    // Conforme spec: max 28 chars para memo_text na Stellar
-    const refMonth = params.referenceMonth.replace(/[^0-9]/g, '').slice(0, 6); // YYYYMM
-    const unitNum  = params.unitNumber.replace(/[^0-9]/g, '');
-    const memoText = `COND-${refMonth}-APTO${unitNum}`.slice(0, 28);
-    
-    console.log(`[Stellar] Memo: ${memoText} | BoletoID: ${params.boletoId}`);
-
-    const transaction = new TransactionBuilder(account, {
-      fee: String(Number(BASE_FEE) * 2), // fee um pouco maior para prioridade
-      networkPassphrase: NETWORK,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: toPubKey,
-          asset: paymentAsset,
-          amount: paymentAmount,
-        })
-      )
-      .addMemo(Memo.text(memoText))
-      .setTimeout(30)
-      .build();
-
-    transaction.sign(operatorKeypair);
-
-    // ── Retry com backoff exponencial (max 3 tentativas) ──
-    let result: any;
-    let lastError: any;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
+        // Recarrega a conta a cada tentativa para obter o sequence number atualizado
+        const account = await server.loadAccount(fromPubKey);
+
+        // Verifica se a conta tem trustline para USDC.
+        // Na testnet, se não tiver, usamos XLM como fallback e anotamos no memo.
+        let paymentAsset = USDC_ASSET;
+
+        const balances = account.balances as any[];
+        const hasUsdc = balances.some(
+          (b: any) =>
+            b.asset_type === 'credit_alphanum4' &&
+            b.asset_code === 'USDC' &&
+            b.asset_issuer === USDC_ISSUER_TESTNET
+        );
+
+        if (!hasUsdc) {
+          // Fallback: usa XLM nativo (sempre disponível na testnet)
+          // Em produção, este cenário não ocorre pois a Abroad já entrega USDC
+          paymentAsset = Asset.native();
+          paymentAmount = (usdcAmount * 0.1).toFixed(7); // XLM simbólico (0.1 XLM ≈ 1 USDC em testnet)
+          assetUsed = 'XLM';
+        }
+
+        // Memo no formato padrão: COND-YYYYMM-APTONUM (ex: COND-202607-APTO101)
+        // Conforme spec: max 28 chars para memo_text na Stellar
+        const refMonth = params.referenceMonth.replace(/[^0-9]/g, '').slice(0, 6); // YYYYMM
+        const unitNum  = params.unitNumber.replace(/[^0-9]/g, '');
+        const memoText = `COND-${refMonth}-APTO${unitNum}`.slice(0, 28);
+
+        // [CORREÇÃO 3] Substituído Memo.text() por Memo.hash() na transação de pagamento.
+        // Antes, o memo era um texto legível (COND-YYYYMM-APTOnnn), o que não atendia
+        // ao requisito da arquitetura descrita no cabeçalho deste arquivo:
+        // "[Ancora hash] → hash do comprovante registrado via memo_hash".
+        // Agora o memo_hash é o SHA-256 do texto de referência do boleto,
+        // convertido para Buffer de 32 bytes conforme exigido pelo protocolo Stellar.
+        // O memoText continua sendo calculado e logado para fins de rastreabilidade.
+        console.log(`[Stellar] Memo ref: ${memoText} | BoletoID: ${params.boletoId} | Tentativa: ${attempt}/3`);
+
+        const memoHashBuffer = Buffer.from(
+          await sha256Hex(memoText), // SHA-256 do texto de referência → string hex
+          'hex'                      // converte hex → Buffer de 32 bytes (exigido pelo Stellar)
+        );
+
+        const transaction = new TransactionBuilder(account, {
+          fee: String(Number(BASE_FEE) * 2), // fee um pouco maior para prioridade
+          networkPassphrase: NETWORK,
+        })
+          .addOperation(
+            Operation.payment({
+              destination: toPubKey,
+              asset: paymentAsset,
+              amount: paymentAmount,
+            })
+          )
+          // [CORREÇÃO 3 — continuação] Memo.hash() em vez de Memo.text()
+          .addMemo(Memo.hash(memoHashBuffer))
+          .setTimeout(30)
+          .build();
+
+        transaction.sign(operatorKeypair);
         result = await server.submitTransaction(transaction);
-        break; // sucesso
+        break; // sucesso — sai do loop
+
       } catch (err: any) {
         lastError = err;
         console.error(`[Stellar] Tentativa ${attempt}/3 falhou:`, err?.message);
@@ -232,6 +259,7 @@ export async function processBoletoPagamento(params: {
         }
       }
     }
+
     if (!result) throw lastError;
 
     const settlement = {
