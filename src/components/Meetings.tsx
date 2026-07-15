@@ -1,7 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Video, Calendar, Users, Clock, FileText, Plus, ExternalLink, CheckCircle, Bell, Download } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { CreateMeetingModal } from './CreateMeetingModal';
+import { isManager, type Role } from '@/lib/rbac';
 
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -28,7 +29,7 @@ interface Meeting {
 interface MeetingsProps {
   userProfile: {
     name: string;
-    role: string;
+    role: Role;
   };
 }
 
@@ -105,7 +106,7 @@ export function Meetings({ userProfile }: MeetingsProps) {
   const [selectedMeetingForAta, setSelectedMeetingForAta] = useState<Meeting | null>(null);
   const [ataText, setAtaText] = useState('');
 
-  const canCreateMeeting = userProfile.role === 'Síndico' || userProfile.role === 'Administrador';
+  const canCreateMeeting = isManager(userProfile.role);
 
   const handleCreateMeeting = (data: Omit<Meeting, 'id' | 'participants' | 'createdBy' | 'createdAt' | 'status'>) => {
     const newMeeting: Meeting = {

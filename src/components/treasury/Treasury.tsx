@@ -7,10 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { useFinancialSummary, PAID_STATUS } from '../../hooks/useFinancialSummary';
 
 import { GenerateBoletoModal } from './GenerateBoletoModal';
+import { isManager, type Role } from '@/lib/rbac';
 
 interface TreasuryProps {
   userProfile?: {
-    role: string;
+    role: Role;
   };
 }
 
@@ -49,7 +50,7 @@ export function Treasury({ userProfile }: TreasuryProps) {
     totalUnidadesConhecidas,
   } = useFinancialSummary();
 
-  const isAdmin = userProfile?.role === 'Síndico' || userProfile?.role === 'Administradora' || userProfile?.role === 'Administrador';
+  const isManagerRole = isManager(userProfile?.role);
 
   const metaFundoReserva = 100000; // meta ainda fixa — não há de onde derivar isso dos boletos
   const percentualMeta = metaFundoReserva > 0 ? Math.min(100, Math.round((fundoReserva / metaFundoReserva) * 100)) : 0;
@@ -248,7 +249,7 @@ export function Treasury({ userProfile }: TreasuryProps) {
       </div>
 
       {/* Admin: Gestão de Boletos */}
-      {isAdmin && (
+      {isManagerRole && (
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-wave-100 shadow-lg mb-8 relative z-10">
           <div className="p-6 border-b border-wave-100">
             <div className="flex items-center justify-between">

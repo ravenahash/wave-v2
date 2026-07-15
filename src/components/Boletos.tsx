@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+﻿import { toast } from 'sonner';
 import { useState } from 'react';
 import { Receipt, DollarSign, CheckCircle, Clock, AlertCircle, Plus, TrendingUp } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -6,6 +6,7 @@ import { IssueBoletoModal } from './IssueBoletoModal';
 import { BoletoDetailsModal } from './BoletoDetailsModal';
 import { PagamentoStellarModal } from './PagamentoStellarModal';
 import { useBlockchainAutoRegistry } from '../hooks/useBlockchainAutoRegistry';
+import { isManager, isPlatformAdmin, type Role } from '@/lib/rbac';
 
 interface Boleto {
   id: string;
@@ -37,7 +38,7 @@ interface Boleto {
 interface BoletosProps {
   userProfile: {
     name: string;
-    role: string;
+    role: Role;
     unit?: string;
   };
 }
@@ -188,8 +189,8 @@ export function Boletos({ userProfile }: BoletosProps) {
   const [boletoParaPagar, setBoletoParaPagar] = useState<Boleto | null>(null);
   const { registerPayment } = useBlockchainAutoRegistry();
 
-  const canIssueBoleto = userProfile.role === 'Síndico' || userProfile.role === 'Administrador';
-  const isAdmin = userProfile.role === 'Administrador';
+  const canIssueBoleto = isManager(userProfile.role);
+  const isAdmin = isPlatformAdmin(userProfile.role);
 
   // Callback de sucesso do pagamento Stellar
   function handlePagamentoStellarSucesso(result: any) {

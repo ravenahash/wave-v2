@@ -1,8 +1,10 @@
 ﻿'use client';
 
-import { LayoutDashboard, Vote, Wallet, FileText, Wrench, Home, LogOut, Settings, Video, Receipt, Shield, MessageSquare, UserPlus, X } from 'lucide-react';
+import { LayoutDashboard, Vote, Wallet, FileText, Wrench, Home, LogOut, Settings, SlidersHorizontal, Video, Receipt, Shield, MessageSquare, UserPlus, User, X } from 'lucide-react';
+import { formatDisplayName } from '@/lib/formatName';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useMenuBadges } from '@/hooks/useMenuBadges';
+import { isManager, type Role } from '@/lib/rbac';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
@@ -11,7 +13,7 @@ interface SidebarProps {
   userProfile: {
     name: string;
     unit: string;
-    role: string;
+    role: Role;
     email: string;
     avatar?: string;
   };
@@ -24,7 +26,7 @@ interface SidebarProps {
 
 export function Sidebar({ userProfile, onLogout, isMobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const isAdmin = userProfile.role === 'Administrador' || userProfile.role === 'Síndico';
+  const isManagerRole = isManager(userProfile.role);
   const { unreadCount } = useNotifications();
   const { governanceCount, communicationCount, meetingsCount, boletosCount, maintenanceCount } = useMenuBadges();
 
@@ -46,16 +48,16 @@ export function Sidebar({ userProfile, onLogout, isMobileOpen = false, onMobileC
     { href: '/dashboard/maintenance',    label: 'Manutenção',  icon: Wrench,          badge: maintenanceCount > 0 ? maintenanceCount : undefined },
     { href: '/dashboard/blockchain',     label: 'Auditoria Stellar',  icon: Shield },
     { href: '/dashboard/units',          label: 'Unidades',    icon: Home },
-    { href: '/dashboard/create-account', label: 'Criar Nova Conta', icon: UserPlus },
-    ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin Panel', icon: Settings }] : [])
+    // RBAC (regra permanente do projeto): "Criar Nova Conta" é restrito a
+    // Síndico/Administrador — Morador não deve ver esse item no menu.
+    ...(isManagerRole ? [
+      { href: '/dashboard/create-account', label: 'Criar Nova Conta', icon: UserPlus },
+      { href: '/dashboard/admin', label: 'Admin Panel', icon: Settings },
+      { href: '/dashboard/settings', label: 'Configurações', icon: SlidersHorizontal },
+    ] : [])
   ];
 
-  const initials = userProfile.name
-    .split(' ')
-    .slice(0, 2)
-    .map(n => n[0])
-    .join('')
-    .toUpperCase();
+  const displayName = formatDisplayName(userProfile.name);
 
   return (
     <>
@@ -104,11 +106,11 @@ export function Sidebar({ userProfile, onLogout, isMobileOpen = false, onMobileC
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={userProfile.avatar} alt={userProfile.name} className="w-full h-full object-cover" />
               ) : (
-                <span className="text-wave-600 text-xs font-serif">{initials}</span>
+                <User className="w-5 h-5 text-wave-300" aria-label={userProfile.name} />
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-wave-800 text-sm font-medium truncate">{userProfile.name}</p>
+              <p className="text-wave-800 text-sm font-medium truncate">{displayName}</p>
               <p className="text-wave-400 text-xs truncate font-serif italic">{userProfile.role} · {userProfile.unit}</p>
             </div>
           </div>
