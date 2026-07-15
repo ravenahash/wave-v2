@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Vote, Plus, Filter, TrendingUp, Clock, CheckCircle, XCircle, MessageSquare, User, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
@@ -39,7 +39,11 @@ interface Comment {
 export function GovernanceUser({ onViewProposal, userProfile }: GovernanceUserProps) {
   const [proposals, setProposals] = useLocalStorage<Proposal[]>('wave_proposals', []);
   const [pendingProposals, setPendingProposals] = useLocalStorage<Proposal[]>('wave_pending_proposals', []);
-  const [filter, setFilter] = useState<'all' | 'active' | 'approved' | 'rejected'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'approved' | 'rejected'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('filtro') === 'ativas'
+      ? 'active'
+      : 'all'
+  );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [view, setView] = useState<'voting' | 'priorities'>('voting');
   const [expandedComments, setExpandedComments] = useState<string | null>(null);

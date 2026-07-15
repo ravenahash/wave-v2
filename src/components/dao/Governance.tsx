@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Vote, Clock, CheckCircle, XCircle, Plus, Filter, Waves, TrendingUp } from 'lucide-react';
@@ -32,7 +32,11 @@ interface GovernanceProps {
 
 export function Governance({ onViewProposal }: GovernanceProps) {
   const { userProfile: user, isAuthenticated } = useUser();
-  const [filter, setFilter] = useState<'all' | 'active' | 'approved' | 'rejected'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'approved' | 'rejected'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('filtro') === 'ativas'
+      ? 'active'
+      : 'all'
+  );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [view, setView] = useState<'voting' | 'priorities'>('voting');
   const [proposals, setProposals] = useLocalStorage<Proposal[]>('wave_proposals', [
