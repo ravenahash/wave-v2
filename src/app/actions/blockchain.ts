@@ -1,24 +1,15 @@
-'use server';
+"use server";
 
 /**
- * Wave · Server Actions de Ancoragem na Blockchain (Stellar)
- * ---------------------------------------------------------------------------
- * Estas funções são chamadas pelo frontend (via useContracts / 
- * useBlockchainAutoRegistry) sempre que um evento crítico precisa de prova
- * de integridade: voto encerrado, proposta aprovada, documento/ata aprovada,
- * pagamento confirmado.
- *
- * Mantemos os MESMOS NOMES de função que existiam na versão anterior
- * (que simulava Ethereum/Base) para não exigir mudanças em cascata no
- * restante do app. Por dentro, agora chamam a Stellar Testnet de verdade.
+ * Wave - Server Actions de Ancoragem na Blockchain (Stellar)
+ * Agora protegidas: toda action exige sessao; acoes de gestao exigem gestor.
  */
 
-import { anchorHashOnStellar, sha256Hex, verifyAnchoredHash } from '@/lib/stellar';
+import { anchorHashOnStellar, sha256Hex, verifyAnchoredHash } from "@/lib/stellar";
+import { requireSession, requireManager } from "@/server/auth/guard";
 
-/**
- * Registra um voto, ancorando o hash do conteúdo do voto na Stellar.
- */
 export async function registerVoteOnChain(proposalId: string, vote: string, userId: string) {
+  await requireSession(); // qualquer morador autenticado pode votar
   const payload = JSON.stringify({ proposalId, vote, userId, ts: Date.now() });
   const hash = await sha256Hex(payload);
   const result = await anchorHashOnStellar(hash);
@@ -33,10 +24,8 @@ export async function registerVoteOnChain(proposalId: string, vote: string, user
   };
 }
 
-/**
- * Registra uma proposta aprovada, ancorando o hash do conteúdo na Stellar.
- */
 export async function createProposalOnChain(proposalData: any, userId: string) {
+  await requireManager(); // aprovar/registrar proposta e ato de gestao
   const payload = JSON.stringify({ proposalData, userId, ts: Date.now() });
   const hash = await sha256Hex(payload);
   const result = await anchorHashOnStellar(hash);
@@ -52,13 +41,9 @@ export async function createProposalOnChain(proposalData: any, userId: string) {
   };
 }
 
-/**
- * Registra o hash de um documento (ata, prestação de contas, comprovante)
- * na Stellar. O documento em si NUNCA é enviado à blockchain — apenas
- * seu hash SHA-256.
- */
 export async function registerDocumentOnChain(docHash: string, userId: string) {
-  const cleanHash = docHash.replace(/^0x/, '');
+  await requireManager(); // registrar ata/prestacao de contas e ato de gestao
+  const cleanHash = docHash.replace(/^0x/, "");
   const result = await anchorHashOnStellar(cleanHash);
 
   return {
@@ -70,16 +55,13 @@ export async function registerDocumentOnChain(docHash: string, userId: string) {
   };
 }
 
-/**
- * Verifica se um documento corresponde ao hash ancorado na Stellar.
- * Usado pelo botão "Verificar autenticidade".
- */
 export async function verifyDocumentOnChain(stellarTxHash: string, currentContentHash: string) {
+  await requireSession(); // verificar autenticidade: qualquer autenticado
   const anchored = await verifyAnchoredHash(stellarTxHash);
-  const cleanCurrentHash = currentContentHash.replace(/^0x/, '');
+  const cleanCurrentHash = currentContentHash.replace(/^0x/, "");
 
   if (!anchored.found) {
-    return { verified: false, reason: 'Transação não encontrada na Stellar.' };
+    return { verified: false, reason: "Transacao nao encontrada na Stellar." };
   }
 
   const matches = anchored.memoHashHex === cleanCurrentHash;
@@ -87,28 +69,21 @@ export async function verifyDocumentOnChain(stellarTxHash: string, currentConten
   return {
     verified: matches,
     reason: matches
-      ? 'Hash corresponde ao conteúdo atual. Documento não foi alterado.'
-      : 'Hash NÃO corresponde. O conteúdo pode ter sido alterado após o registro.',
+      ? "Hash corresponde ao conteudo atual. Documento nao foi alterado."
+      : "Hash NAO corresponde. O conteudo pode ter sido alterado apos o registro.",
     ledger: anchored.ledger,
     createdAt: anchored.createdAt,
   };
 }
 
-/**
- * Gera o hash SHA-256 de um conteúdo (ata, comprovante, payload de voto).
- */
 export async function hashDocument(content: string) {
+  await requireSession();
   const hash = await sha256Hex(content);
   return `0x${hash}`;
 }
 
-/**
- * Função genérica usada pelo useBlockchainAutoRegistry: recebe qualquer
- * metadata (pagamento, cadastro de usuário, transação financeira etc.),
- * gera o hash do conteúdo e ancora na Stellar. Usada quando o evento não
- * tem uma Server Action dedicada (como votos e documentos têm).
- */
 export async function anchorMetadataOnChain(metadata: Record<string, unknown>) {
+  await requireSession();
   const payload = JSON.stringify(metadata);
   const hash = await sha256Hex(payload);
   const result = await anchorHashOnStellar(hash);

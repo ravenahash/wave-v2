@@ -1,11 +1,8 @@
-'use server';
+"use server";
 
-import { processBoletoPagamento, getAccountBalances } from '@/lib/stellar-payment';
+import { processBoletoPagamento, getAccountBalances } from "@/lib/stellar-payment";
+import { requireSession, requirePlatformAdmin } from "@/server/auth/guard";
 
-/**
- * Server Action: processa o pagamento completo de um boleto.
- * Chamada pelo componente Boletos.tsx quando o morador clica em "Pagar".
- */
 export async function pagarBoletoViaStellar(params: {
   boletoId: string;
   brlAmount: number;
@@ -13,20 +10,23 @@ export async function pagarBoletoViaStellar(params: {
   referenceMonth: string;
   payerName: string;
 }) {
+  // C2: exige sessao valida no servidor (nao basta esconder o botao).
+  // Regra fina "morador so paga o proprio boleto" entra quando o boleto
+  // vier do banco.
+  await requireSession();
   return processBoletoPagamento(params);
 }
 
-/**
- * Server Action: retorna os saldos da conta operacional da Wave.
- * Usada pelo painel admin para mostrar status da conta.
- */
 export async function getSaldoContaOperacional() {
+  // C3: dado operacional da plataforma -> exclusivo de Admin, checado no servidor.
+  await requirePlatformAdmin();
+
   const secret = process.env.WAVE_STELLAR_SECRET;
   if (!secret) {
-    return { xlm: '0.00', usdc: '0.00', found: false, publicKey: null };
+    return { xlm: "0.00", usdc: "0.00", found: false, publicKey: null };
   }
 
-  const { Keypair } = await import('@stellar/stellar-sdk');
+  const { Keypair } = await import("@stellar/stellar-sdk");
   const kp = Keypair.fromSecret(secret);
   const publicKey = kp.publicKey();
 
